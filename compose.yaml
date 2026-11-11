@@ -1,0 +1,57 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      GLPI_BASE_URL: ${GLPI_BASE_URL:?Define GLPI_BASE_URL}
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
+      GLPI_ALLOW_HTTP: ${GLPI_ALLOW_HTTP:-false}
+      GLPI_TIMEOUT_MS: ${GLPI_TIMEOUT_MS:-10000}
+      GLPI_CLOSE_STRATEGY: ${GLPI_CLOSE_STRATEGY:-status-closed}
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?Define SESSION_SECRET}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-8}
+      APP_ORIGIN: ${APP_ORIGIN:?Define APP_ORIGIN}
+    extra_hosts:
+      - "soporte.mairenadelalcor.net:10.158.1.220"
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      app:
+        condition: service_healthy
+  redis:
+    image: redis:8.6.1-alpine
+    restart: unless-stopped
+    command:
+      ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  frontend:
+  backend:
